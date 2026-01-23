@@ -1,135 +1,137 @@
-// ================= AUTH CONTROLLER – TWILIO VERIFY VERSION =================
+// =======================================
+// Future Viz - Auth Controller (DEMO MODE)
+// Hardcoded OTP (no Twilio required)
+// =======================================
 
-const twilio = require("twilio");
-const jwt = require("jsonwebtoken");
+const jwt = require('jsonwebtoken');
 
-// -------- SEND OTP --------
+
+// =======================================
+// In-memory OTP store
+// =======================================
+
+const otpStore = {};
+
+
+// =======================================
+// Send OTP (DEMO)
+// =======================================
+
 const sendOTPToPhone = async (req, res) => {
   try {
     const { phoneNumber } = req.body;
 
     if (!phoneNumber) {
       return res.status(400).json({
-        message: "Phone number is required"
+        message: 'Phone number is required'
       });
     }
 
-    // Initialize Twilio client
-    const client = twilio(
-      process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_AUTH_TOKEN
-    );
+    // 🔥 HARD CODED OTP (sir asked)
+    const otp = "123456";
 
-    // Send OTP using TWILIO VERIFY
-    await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
-      .verifications.create({
-        to: phoneNumber,
-        channel: "sms"
-      });
+    // Store OTP temporarily
+    otpStore[phoneNumber] = {
+      otp,
+      expiry: Date.now() + 10 * 60 * 1000 // 10 minutes
+    };
 
-    console.log(`📱 OTP sent to ${phoneNumber}`);
+    console.log(`📱 Demo OTP for ${phoneNumber}: ${otp}`);
 
-    return res.json({
-      message: "OTP sent successfully"
+    res.json({
+      message: 'OTP sent successfully (demo mode)',
+      otp // visible for testing
     });
 
   } catch (error) {
-    console.error("Error sending OTP:", error.message);
-
-    return res.status(500).json({
-      message: error.message
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
 
-// -------- VERIFY OTP & LOGIN --------
+// =======================================
+// Verify OTP
+// =======================================
+
 const verifyOTP = async (req, res) => {
   try {
     const { phoneNumber, otp } = req.body;
 
     if (!phoneNumber || !otp) {
       return res.status(400).json({
-        message: "Phone number and OTP are required"
+        message: 'Phone number and OTP are required'
       });
     }
 
-    const client = twilio(
-      process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_AUTH_TOKEN
-    );
+    const stored = otpStore[phoneNumber];
 
-    // Verify with Twilio
-    const result = await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
-      .verificationChecks.create({
-        to: phoneNumber,
-        code: otp
-      });
-
-    if (result.status !== "approved") {
+    if (
+      !stored ||
+      stored.otp !== otp ||
+      stored.expiry < Date.now()
+    ) {
       return res.status(400).json({
-        message: "Invalid OTP"
+        message: 'Invalid or expired OTP'
       });
     }
 
-    // Create JWT after successful verification
+    // Create JWT token
     const token = jwt.sign(
       {
         userId: `user_${phoneNumber}_${Date.now()}`,
         phoneNumber
       },
-      process.env.JWT_SECRET,
-      { expiresIn: "30d" }
+      process.env.JWT_SECRET || "secretkey",
+      { expiresIn: '30d' }
     );
 
-    return res.json({
-      message: "Login successful",
+    delete otpStore[phoneNumber];
+
+    res.json({
+      message: 'Login successful',
       token,
       user: {
-        id: `user_${phoneNumber}_${Date.now()}`,
+        id: `user_${phoneNumber}`,
         phoneNumber,
-        name: "",
-        careerGoal: ""
+        name: '',
+        careerGoal: ''
       }
     });
 
   } catch (error) {
-    console.error("Error verifying OTP:", error.message);
-
-    return res.status(500).json({
-      message: error.message
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
 
-// -------- GET PROFILE --------
+// =======================================
+// Get Profile
+// =======================================
+
 const getUserProfile = async (req, res) => {
   try {
-    return res.json({
+    res.json({
       id: req.user.userId,
       phoneNumber: req.user.phoneNumber,
-      name: "",
+      name: '',
       age: null,
-      careerGoal: ""
+      careerGoal: ''
     });
-
   } catch (error) {
-    return res.status(500).json({
-      message: error.message
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
 
-// -------- UPDATE PROFILE --------
+// =======================================
+// Update Profile
+// =======================================
+
 const updateUserProfile = async (req, res) => {
   try {
     const { name, age, careerGoal } = req.body;
 
-    return res.json({
+    res.json({
       id: req.user.userId,
       phoneNumber: req.user.phoneNumber,
       name,
@@ -137,14 +139,15 @@ const updateUserProfile = async (req, res) => {
       careerGoal,
       updatedAt: new Date()
     });
-
   } catch (error) {
-    return res.status(500).json({
-      message: error.message
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
+
+// =======================================
+// Exports
+// =======================================
 
 module.exports = {
   sendOTPToPhone,
