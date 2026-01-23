@@ -1,245 +1,127 @@
-import { useState, useRef, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import axios from 'axios'
-import './PhotoTransform.css'
+import React, { useState } from "react";
+import axios from "axios";
 
-export default function PhotoTransform({ user }) {
-  const [career, setCareer] = useState('')
-  const [photo, setPhoto] = useState(null)
-  const [preview, setPreview] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [transformed, setTransformed] = useState(null)
-  const [transformationId, setTransformationId] = useState(null)
-  const fileInputRef = useRef(null)
-  const videoRef = useRef(null)
-  const canvasRef = useRef(null)
-  const [useCamera, setUseCamera] = useState(false)
-  const navigate = useNavigate()
-  const location = useLocation()
+export default function PhotoTransform() {
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
 
-  useEffect(() => {
-    if (location.state?.career) {
-      setCareer(location.state.career)
+  // ===============================
+  // Handle file select (camera/gallery)
+  // ===============================
+  const handleFileChange = (e) => {
+    const selected = e.target.files[0];
+    if (!selected) return;
+
+    setFile(selected);
+    setPreview(URL.createObjectURL(selected));
+  };
+
+  // ===============================
+  // Mock transformation (demo mode)
+  // ===============================
+  const handleTransform = async () => {
+    if (!file) {
+      alert("Please select an image first");
+      return;
     }
-  }, [location])
-
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      setPhoto(file)
-      const reader = new FileReader()
-      reader.onload = (e) => setPreview(e.target.result)
-      reader.readAsDataURL(file)
-      setUseCamera(false)
-    }
-  }
-
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
-      })
-      videoRef.current.srcObject = stream
-      setUseCamera(true)
-    } catch (error) {
-      alert('Could not access camera')
-    }
-  }
-
-  const capturePhoto = () => {
-    const canvas = canvasRef.current
-    const video = videoRef.current
-    const ctx = canvas.getContext('2d')
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-    canvas.toBlob((blob) => {
-      const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' })
-      setPhoto(file)
-      setPreview(canvas.toDataURL())
-
-      // Stop camera
-      if (video.srcObject) {
-        video.srcObject.getTracks().forEach((track) => track.stop())
-      }
-      setUseCamera(false)
-    })
-  }
-
-  const handleTransform = async (e) => {
-    e.preventDefault()
-
-    if (!photo || !career) {
-      alert('Please select a photo and career')
-      return
-    }
-
-    setLoading(true)
 
     try {
-      const formData = new FormData()
-      formData.append('image', photo)
-      formData.append('career', career)
+      setLoading(true);
 
-      const token = localStorage.getItem('authToken')
-      const response = await axios.post('/api/transformations/transform', formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      })
+      // simulate API delay
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      setTransformationId(response.data.transformationId)
+      // mock result (same image)
+      setResult(preview);
 
-      // Poll for transformation status
-      let completed = false
-      let attempts = 0
-      while (!completed && attempts < 30) {
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-        const statusResponse = await axios.get(
-          `/api/transformations/${response.data.transformationId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-
-        if (statusResponse.data.status === 'completed') {
-          setTransformed(statusResponse.data)
-          completed = true
-        } else if (statusResponse.data.status === 'failed') {
-          throw new Error('Transformation failed')
-        }
-        attempts++
-      }
-
-      if (!completed) {
-        throw new Error('Transformation timeout')
-      }
-    } catch (error) {
-      alert(error.message || 'Transformation failed. Please try again.')
+      alert("✅ Demo transformation completed!");
+    } catch (err) {
+      alert("Error transforming image");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="transform-container">
-      <div className="transform-header">
-        <h1>📸 Photo Transformation</h1>
-        <button className="btn-back" onClick={() => navigate('/dashboard')}>
-          ← Back
-        </button>
-      </div>
+    <div style={styles.container}>
+      <h2 style={styles.title}>📸 Transform Your Future Self</h2>
 
-      <div className="transform-box">
-        {!transformed ? (
-          <>
-            <div className="career-selection">
-              <label htmlFor="career">What do you want to become?</label>
-              <input
-                id="career"
-                type="text"
-                value={career}
-                onChange={(e) => setCareer(e.target.value)}
-                placeholder="e.g., Pilot, Doctor, Teacher"
-              />
-            </div>
+      {/* Camera / File Upload */}
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileChange}
+        style={styles.input}
+      />
 
-            <div className="photo-section">
-              {useCamera ? (
-                <div className="camera-container">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    style={{
-                      width: '100%',
-                      borderRadius: '12px',
-                      marginBottom: '15px',
-                    }}
-                  />
-                  <canvas
-                    ref={canvasRef}
-                    width="320"
-                    height="240"
-                    style={{ display: 'none' }}
-                  />
-                  <button className="btn-primary" onClick={capturePhoto}>
-                    📷 Capture Photo
-                  </button>
-                </div>
-              ) : preview ? (
-                <div className="preview-section">
-                  <img src={preview} alt="Preview" className="preview-image" />
-                  <button
-                    className="btn-secondary"
-                    onClick={() => {
-                      setPreview(null)
-                      setPhoto(null)
-                    }}
-                  >
-                    Change Photo
-                  </button>
-                </div>
-              ) : (
-                <div className="photo-options">
-                  <button
-                    className="photo-option-btn"
-                    onClick={() => fileInputRef.current.click()}
-                  >
-                    📁 Upload Photo
-                  </button>
-                  <button className="photo-option-btn" onClick={startCamera}>
-                    📷 Take Photo
-                  </button>
-                </div>
-              )}
+      {/* Preview */}
+      {preview && (
+        <div style={styles.previewBox}>
+          <p>Original Image</p>
+          <img src={preview} alt="preview" style={styles.image} />
+        </div>
+      )}
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileSelect}
-                style={{ display: 'none' }}
-              />
-            </div>
+      {/* Button */}
+      <button
+        onClick={handleTransform}
+        disabled={loading}
+        style={styles.button}
+      >
+        {loading ? "Transforming..." : "Transform Photo"}
+      </button>
 
-            {preview && (
-              <button className="btn-primary" onClick={handleTransform} disabled={loading}>
-                {loading ? '✨ Transforming...' : '✨ Transform Now'}
-              </button>
-            )}
-          </>
-        ) : (
-          <div className="result-section">
-            <h2>Your Future Self as a {career}! 🎉</h2>
-            <div className="result-images">
-              <div className="image-box">
-                <p className="image-label">Original</p>
-                <img src={preview} alt="Original" />
-              </div>
-              <div className="arrow">→</div>
-              <div className="image-box">
-                <p className="image-label">Transformed</p>
-                <img src={transformed.transformedImageUrl} alt="Transformed" />
-              </div>
-            </div>
-
-            <div className="action-buttons">
-              <button
-                className="btn-primary"
-                onClick={() => {
-                  setTransformed(null)
-                  setPreview(null)
-                  setPhoto(null)
-                }}
-              >
-                Try Another
-              </button>
-              <button className="btn-secondary" onClick={() => navigate('/gallery')}>
-                View Gallery
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Result */}
+      {result && (
+        <div style={styles.previewBox}>
+          <p>✨ Transformed Result (Demo)</p>
+          <img src={result} alt="result" style={styles.image} />
+        </div>
+      )}
     </div>
-  )
+  );
 }
+
+
+// ===============================
+// Simple clean styles
+// ===============================
+
+const styles = {
+  container: {
+    textAlign: "center",
+    padding: "30px",
+  },
+
+  title: {
+    marginBottom: "20px",
+  },
+
+  input: {
+    marginBottom: "20px",
+  },
+
+  previewBox: {
+    marginTop: "20px",
+  },
+
+  image: {
+    width: "250px",
+    borderRadius: "12px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+  },
+
+  button: {
+    backgroundColor: "#4f46e5",
+    color: "white",
+    padding: "10px 18px",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "600",
+    marginTop: "15px",
+  },
+};
